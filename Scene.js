@@ -9,7 +9,7 @@ class Scene extends Phaser.Scene {
 
     // chargement du fond et du yoyo
     this.load.image("bg", "bg.png");
-    this.load.image("yoyo", "yoyo.png");
+    this.load.image("sword", "sword.png");
 
     // chargement sprite joueur
     this.load.spritesheet('player', 'player.png', {frameWidth: 48, frameHeight: 48});
@@ -47,15 +47,20 @@ class Scene extends Phaser.Scene {
     this.player.flipX = true;
     this.player.setBounce(0.2);
     this.player.setCollideWorldBounds(true);
-    this.player.setDepth(1);
+    this.player.setDepth(0);
 
-    //Ajout du yoyo et de ses parametres
-    this.yoyo = this.physics.add.sprite(this.player.x, this.player.y, "yoyo")
-    this.yoyo.setScale(2)
-    this.yoyo.setDepth(0);
-    this.yoyo.setDisplaySize(20, 20)
-    this.yoyo.launch = false;
-    this.yoyo.body.setAllowGravity(false)
+    this.sword = this.physics.add.sprite(200, 100, "sword").setScale(.1);
+    this.sword.body.setAllowGravity(false);
+    this.sword.setDepth(1);
+    this.sword.setVisible(false);
+    this.sword.attack = 100
+    this.sword.disableBody()
+
+    this.enemy = this.physics.add.sprite(700, 100).setDisplaySize(50,100)
+    this.enemy.setCollideWorldBounds(true);
+    this.enemy.setDepth(0);
+    this.enemy.body.setImmovable(true)
+    this.enemy.hp = 100;
 
     // ancrage de la caméra sur le joueur
     this.cameras.main.startFollow(this.player);
@@ -63,6 +68,9 @@ class Scene extends Phaser.Scene {
     //Ajout des colliders sur la map puis entre la map et le joueur
     this.platforms.setCollisionByExclusion(-1, true);
     this.physics.add.collider(this.player, this.platforms);
+    this.physics.add.collider(this.player, this.enemy);
+    this.physics.add.collider(this.enemy, this.platforms);
+    this.physics.add.collider(this.sword, this.enemy);
 
     //Ajout des controles
     this.inputManager()
@@ -70,65 +78,31 @@ class Scene extends Phaser.Scene {
     //Ajout des animations
     this.animManager()
 
-    //Fonction qui se declenche a chaque fois qu'on clique avec la souris
+    //Quand on clique avec la souris on fait apparaitre l'épée
     this.input.on('pointerdown', function (pointer) {
-      //Si le yoyo n'est pas deja lancé et que la distance entre le pointeur de la souris et le joueur est assez petite on rentre dans la focntion
-      if(this.yoyo.launch === false && Phaser.Math.Distance.Between(this.player.x, this.player.y, pointer.worldX, pointer.worldY) <= 200){
 
-        //this.drawLine()
-        //On desactive le clavier pour que le joueur ne puisse plus bouger
-        this.input.keyboard.enabled = false;
-        //On indique qu'on est en train de lancer le yoyo avec le booleen launch
-        this.yoyo.launch = true;
-        //On reset la velocité du joueur
-        this.player.setVelocityX(0);
-        this.player.setVelocityY(0);
-        //On desactive ça soumission a la gravité et on le rend immobile
-        this.player.body.setAllowGravity(false)
-        this.player.body.setImmovable(true)
-        //On ajoute un tween pour creer le mouvement du yoyo
-        this.yoyoTween = this.tweens.add({
-          //La cible du tween est le yoyo (l'objet qu'il fera bouger)
-          targets: this.yoyo,
-          //On lui donne les coordonnées de la destination
-          x: pointer.worldX,
-          y: pointer.worldY,
-          //On definit ça durée
-          duration: 300,
-          //On definit son type de mouvement
-          ease: 'Power2',
-          //On active le parametre yoyo pour que le mouvement revienne a sa position initial
-          yoyo: true,
-        });
-      }
+      //On rend l'épée visible
+      this.sword.setVisible(true);
+      //On active le body de l'épée
+      this.sword.enableBody()
+      //On ajoute un event avec un delay qui fera disparaitre l'épée pendant 250 ms
+      this.time.addEvent({ delay: 250, callback: this.onEvent, callbackScope: this });
+
     }, this);
 
+    let me = this;
+    //On enleve des points de vie a l'enemie qu'on touche
+    this.physics.add.overlap(this.sword, this.enemy, function (){
+      me.enemy.hp -= me.sword.attack;
+    })
   }
 
-  /*drawLine(){
-    this.graphics = this.add.graphics({ lineStyle: { width: 4, color: 0x000000 } });
-    this.line = new Phaser.Geom.Line(this.player.x, this.player.y, this.yoyo.x, this.yoyo.y);
-    this.line.x2 = this.yoyo.x;
-    this.line.y2 = this.yoyo.y;
-    this.redraw();
-  }
-
-  redraw ()
+  //Event qui permet de faire disparaitre l'épée
+  onEvent()
   {
-    this.graphics.clear();
-
-    var points = Phaser.Geom.Line.BresenhamPoints(this.line, 30);
-
-    for(var i = 0; i < points.length; i++)
-    {
-
-      this.graphics.fillPointShape(points[i], 30);
-
-    }
-
-    this.graphics.strokeLineShape(this.line);
-
-  }*/
+    this.sword.disableBody()
+    this.sword.setVisible(false);
+  }
 
   //Input Manager va nous permettre de gerer les differents input
   inputManager() {
@@ -199,33 +173,15 @@ class Scene extends Phaser.Scene {
     if (this.player.body.blocked.down && this.player.body.velocity.x === 0) {
       this.player.anims.play('idle', true);
     }
-    //Si le yoyo n'est pas en train d'etre lancer on mets a jouer ça position pour qu'il reste sur le personnage
-    if(!this.yoyo.launch){
-      this.yoyo.x = this.player.x;
-      this.yoyo.y = this.player.y;
-    }
-    //Sinon on reset la velocité du joueur
-    else{
-      this.player.body.velocity.x = 0;
-      this.player.body.velocity.y = 0;
+    this.sword.x = this.player.x+40;
+    this.sword.y = this.player.y;
 
-      //this.drawLine()
-      //Une fois l'animation terminée
-      if(this.yoyoTween.progress === 1){
-        //On reactive le clavier
-        this.input.keyboard.enabled = true;
-        //this.redraw()
-        //On remets le booleen launch a false pour indiquer qu'on ne lance plus le yoyo
-        this.yoyo.launch = false;
-        //On remets les valeurs par defauts du joueur
-        this.player.body.setAllowGravity(true)
-        this.player.body.setImmovable(false)
-      }
+    if(this.enemy.hp <= 0){
+      this.enemy.disableBody()
+      this.enemy.setVisible(false)
     }
 
-    //console.log(this.yoyo.launch)
-    //console.log(this.input.activePointer.worldX)
-    //console.log(this.input.activePointer.worldY)
+    //console.log(this.enemy.hp)
   }
 }
 
